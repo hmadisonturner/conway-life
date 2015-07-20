@@ -1,0 +1,318 @@
+<html>
+    <head>
+        <title> Conway's Game of Life </title>
+        <style>
+            td {border: 1px solid black; background-color: silver}
+            div#buttonBar {text-align: center}
+            h1 {font-size: 14pt; font-weight: bold; font-family: sans-serif}
+        </style>
+        <script>
+            var lifeConfig = {
+                gridSize: 50,
+                boardSize: 700
+            };
+   
+        </script>
+    </head>
+    <body onload="life.start('board', lifeConfig)">
+        <h1>Conway's Game of Life (<a href="http://en.wikipedia.org/wiki/Conway's_Game_of_Life" title="Wikipedia: Conway's Game of Life">Learn More)</a></h1>
+        <div id="board"> </div>
+        <div id="buttonBar">
+            <button id="clearButton" onclick="life.clear()"> Clear </button>
+	        <button id="stopButton" onclick="life.stop()"> Stop </button>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <button id="playButton" onclick="life.play()"> Play </button>
+            <button id="nextButton" onclick="life.next()"> Next </button>
+        </div>
+        <script>
+
+            var life = {};
+
+            life.start = function(div, cfg) {
+                life.map = [];
+                life.container = div;
+                life.cfg = cfg;
+                
+                if (util.canvasSupported()){ 
+                    life.ui = 5;
+                }
+                else {
+                    life.ui = 4;
+                }
+                    
+                for ( var i = 0; i < (cfg.gridSize * cfg.gridSize); i++ ) {
+                    life.map[i] = false;
+                }
+                
+                life.drawBoard();
+
+                document.getElementById("buttonBar").style.width = life.cfg.boardSize + "px";
+            }
+
+            life.drawBoard = function() {
+                if (life.ui === 4) {
+                    life.drawBoardHtml();
+                }
+                else if (life.ui === 5) {
+                    life.drawBoardCanvas();
+                }
+            }
+
+            life.drawBoardHtml = function() {
+                var boardHtml = "<table style=\"width: " + life.cfg.boardSize + "px";
+                boardHtml += "; height: " + life.cfg.boardSize + "px" + "\">";
+                for ( var i = 0; i < life.map.length; i++ ) {
+                    if (!(i % life.cfg.gridSize)) {
+                        if (i > 0) boardHtml += "</tr>";
+                        boardHtml += "<tr>";
+                    }
+                    boardHtml += "<td id=\"c" + i + "\" onclick=\"life.clicked(" + i + ")\"> </td>";
+                }
+                boardHtml += "</table>";
+                document.getElementById(life.container).innerHTML = boardHtml;
+            }
+
+            life.drawBoardCanvas = function() {
+                var boardHtml = "<canvas ";
+                boardHtml += " id=\"lifeCanvas\"";
+                boardHtml += " width= \"" + life.cfg.boardSize + "\"";
+                boardHtml += " height= \"" + life.cfg.boardSize + "\"";
+                boardHtml += " />"
+                document.getElementById(life.container).innerHTML = boardHtml;
+
+                life.canvas = document.getElementById("lifeCanvas");
+                life.context = life.canvas.getContext("2d");
+
+                life.canvas.addEventListener("click", life.canvasClicked, false);
+                //life.canvas.addEventListener("mouseup", life.canvasMouseUp, false);
+                //life.canvas.addEventListener("mousedown", life.canvasMouseDown, false);
+                
+                life.context.fillStyle = "silver"; //TODO: Make colors configurable
+                life.context.strokeStyle = "white";
+
+                var cellSize = life.cfg.boardSize/life.cfg.gridSize;
+
+                for (var j = 0; j < (life.cfg.gridSize); j++) {
+                    for (var i = 0; i < (life.cfg.gridSize); i++) {
+                        life.context.fillRect(i*cellSize, j*cellSize, cellSize, cellSize);
+                        life.context.strokeRect(i*cellSize, j*cellSize, cellSize, cellSize);
+                        //context.strokeText(cellnum, i*cellSize+2, j*cellSize+10)
+                    }
+                }
+            }
+
+            life.updateBoard = function() {
+                for ( var i = 0; i < life.map.length; i++ ) {
+                    life.updateCell(i);
+                }
+            }
+
+            life.updateCell = function(i) {
+                if (life.ui === 4) {
+                    life.updateCellHtml(i);
+                }
+                else if (life.ui === 5) {
+                    life.updateCellCanvas(i);
+                }
+            }
+
+            life.updateCellHtml = function(i) {
+                if (life.map[i]) {
+                    document.getElementById("c" + i).style.backgroundColor = "green";
+                }
+                else {
+                    document.getElementById("c" + i).style.backgroundColor = "silver";
+                }
+            }
+
+            life.updateCellCanvas = function(i) {
+                var cellSize = life.cfg.boardSize/life.cfg.gridSize;
+                
+                if (life.map[i]) {
+                    life.context.fillStyle = "green"; 
+                }
+                else {
+                    life.context.fillStyle = "silver"; 
+                }
+                
+                life.context.strokeStyle = "white";
+
+                cellCoords = life.getCoords(i);
+                cellX = (cellCoords.col) * cellSize;
+                cellY = (cellCoords.row) * cellSize;
+                
+                life.context.fillRect(cellX, cellY, cellSize, cellSize);
+                life.context.strokeRect(cellX, cellY, cellSize, cellSize);
+                
+            }
+            
+            life.countNeighbors = function(i) {
+                var count = 0;
+                var g = life.cfg.gridSize;
+                var coords = life.getCoords(i);
+                var firstRow = !coords.row;
+                var firstCol = !coords.col;
+                var lastRow = (coords.row == g - 1);
+                var lastCol = (coords.col == g - 1);
+                if (!firstRow && !firstCol) count += life.map[i - g - 1];
+                if (!firstRow) count += life.map[i - g];
+                if (!firstRow && !lastCol) count += life.map[i - g + 1];
+                if (!firstCol) count += life.map[i - 1];
+                if (!lastCol) count += life.map[i + 1];
+                if (!lastRow && !firstCol) count += life.map[i + g - 1];
+                if (!lastRow) count += life.map[i + g];
+                if (!lastRow && !lastCol) count += life.map[i + g + 1];
+                return count;
+            }
+
+            life.lives = function(i) {
+                switch (life.countNeighbors(i)) {
+                    case 2:
+                        if (life.map[i]) {
+                            return true;
+                        }
+                        else {
+                            return false;
+                        }
+                        break;
+                    case 3: 
+                        return true;
+                        break;
+                    default:
+                        return false;
+                        break;
+                }
+            }
+            
+            life.next = function() {
+                var newMap = [];
+                for ( var i = 0; i < life.map.length; i++ ) {
+                    if (life.lives(i)) {
+                        newMap[i] = true;
+                    }
+                    else {
+                        newMap[i] = false;
+                    }
+                }
+                life.map = newMap;
+                life.updateBoard();
+            }
+
+            life.play = function() {
+                life.playing = setInterval(life.next, 500);
+                document.getElementById("playButton").disabled = true;
+                document.getElementById("nextButton").disabled = true;
+            }
+
+            life.stop = function() {
+                clearInterval(life.playing);
+                document.getElementById("playButton").disabled = false;
+                document.getElementById("nextButton").disabled = false;
+            }
+
+            life.clear = function() {
+                life.stop();
+                var i = 0;
+                for ( var i = 0; i < life.map.length; i++ ) life.map[i] = false;
+                life.updateBoard();
+            }
+
+            life.getCoords = function(i) {
+                var coords = {};
+                coords.row = Math.floor(i / lifeConfig.gridSize);
+                coords.col = lifeConfig.gridSize - (lifeConfig.gridSize - (i % lifeConfig.gridSize));
+                return coords;
+            }
+
+            life.getIndex = function(coords) {
+                return (coords.row * lifeConfig.gridSize) + coords.col;
+            }
+
+            life.clicked = function(i) {
+                life.map[i] = !life.map[i];
+                life.updateCell(i);
+            }
+
+            life.canvasClicked = function (e) {
+                var x;
+                var y;
+                if (e.pageX != undefined && e.pageY != undefined) {
+                    x = e.pageX;
+                    y = e.pageY;
+                }
+                else {
+                    x = e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
+                    y = e.clientY + document.body.scrollTop + document.documentElement.scrollTop;
+                }
+                x -= this.offsetLeft;
+                y -= this.offsetTop;
+                var cellSize = life.cfg.boardSize/life.cfg.gridSize;
+                x = Math.min(x, life.cfg.boardSize * cellSize);
+                y = Math.min(y, life.cfg.boardSize * cellSize);
+                //x = Math.min(x, kBoardWidth * kPieceWidth);
+                //y = Math.min(y, kBoardHeight * kPieceHeight);
+                var coords = {};
+                coords.row = Math.floor(y/cellSize);
+                coords.col = Math.floor(x/cellSize);
+                var i = life.getIndex(coords);
+                life.clicked(i);
+            }
+
+            life.selectCell = function(i) {
+                //alert(i);
+            }
+
+            life.canvasMouseDown = function (e) {
+                life.offsetX = life.canvas.getBoundingClientRect().left;
+                life.offsetY = life.canvas.getBoundingClientRect().top;
+                life.selectionStartX = e.clientX - life.offsetX;
+                life.selectionStartY = e.clientY - life.offsetY;
+
+
+            }
+
+            life.canvasMouseUp = function (e) {
+                var rect2x = e.clientX - life.offsetX;
+                var rect2y = e.clientY - life.offsetY;
+                var selectedCells = [];
+                var selectedCount = 0;
+                //life.context.fillRect(life.selectionStartX, life.selectionStartY, rect2x - life.selectionStartX, rect2y - life.selectionStartY);
+                for ( var i = life.selectionStartX; i <= rect2x; i++ ) {
+                    for ( var j = life.selectionStartY; j <= rect2y; j++ ) {
+                        var cellSize = life.cfg.boardSize/life.cfg.gridSize;
+                        x = Math.min(i, life.cfg.boardSize * cellSize);
+                        y = Math.min(j, life.cfg.boardSize * cellSize);
+                        var coords = {};
+                        coords.row = Math.floor(y/cellSize);
+                        coords.col = Math.floor(x/cellSize);
+                        var index = life.getIndex(coords);
+                        if ( selectedCells[index] === undefined ) {
+                            selectedCells[index] = true;
+                            selectedCount++;
+                        }
+                    }
+                }
+                if (selectedCount === 1) {
+                    life.clicked(index);
+                //alert(index)
+                }
+                else {
+                    for (var i = 0; i < selectedCells.length; i++) {
+                        if (selectedCells[i] !== undefined) {
+                            life.selectCell(i);
+                        }
+                    }
+                }
+                //alert(selectedCount)
+            }
+
+            var util = {};
+
+            util.canvasSupported = function() {
+                var elem = document.createElement('canvas');
+                return !!(elem.getContext && elem.getContext('2d'));
+            }
+
+        </script>
+    </body>
+</html>
